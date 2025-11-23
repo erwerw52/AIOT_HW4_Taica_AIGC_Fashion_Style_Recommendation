@@ -78,3 +78,6 @@ streamlit run app.py
 *   `utils.py`: 包含 Log 紀錄與隨機圖片選取等輔助功能。
 *   `simple/`: 存放範例圖片的資料夾。
 *   `requirements.txt`: 專案依賴套件清單。
+
+## 部屬網址
+*  https://huggingface.co/spaces/erwerw52/AIOT_HW4_Taica_AIGC_Fashion_Style_Recommendation[https://huggingface.co/spaces/erwerw52/AIOT_HW4_Taica_AIGC_Fashion_Style_Recommendation]
