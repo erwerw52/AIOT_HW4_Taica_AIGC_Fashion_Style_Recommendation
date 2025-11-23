@@ -1,0 +1,10 @@
+torch
+transformers
+pillow
+streamlit
+scikit-learn
+accelerate
+bitsandbytes
+sentencepiece
+protobuf
+pandas
