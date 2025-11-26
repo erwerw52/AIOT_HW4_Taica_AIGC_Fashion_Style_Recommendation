@@ -79,5 +79,8 @@ streamlit run app.py
 *   `simple/`: 存放範例圖片的資料夾。
 *   `requirements.txt`: 專案依賴套件清單。
 
+## 參考專案
+*  [【Demo07a】AI代理設計模式_Reflection.ipynb](https://github.com/yenlung/AI-Demo/blob/master/%E3%80%90Demo07a%E3%80%91AI%E4%BB%A3%E7%90%86%E8%A8%AD%E8%A8%88%E6%A8%A1%E5%BC%8F_Reflection.ipynb)
+
 ## 部屬網址
 *  [https://huggingface.co/spaces/erwerw52/AIOT_HW4_Taica_AIGC_Fashion_Style_Recommendation](https://huggingface.co/spaces/erwerw52/AIOT_HW4_Taica_AIGC_Fashion_Style_Recommendation)
