@@ -71,15 +71,44 @@ class FashionSystem:
             logger.info(f"Loading Classifier from Hugging Face: {classifier_model}")
 
         logger.info("Loading Classifier...")
+        
+        # Try loading with token first (if available), then without, then fallback
+        hf_token = os.getenv("HF_TOKEN")
+        device = 0 if torch.cuda.is_available() else -1
+        
         try:
-            self.classifier = pipeline(
-                "image-classification", 
-                model=classifier_model
-            )
+            # Attempt 1: Use token if available
+            kwargs = {"device": device}
+            if hf_token:
+                kwargs["token"] = hf_token
+            
+            logger.info(f"Attempting to load classifier with token configuration...")
+            self.classifier = pipeline("image-classification", model=classifier_model, **kwargs)
             logger.info("Classifier loaded successfully.")
-        except Exception as e:
-            logger.error(f"Failed to load classifier: {e}")
-            raise e
+            
+        except Exception as e1:
+            logger.warning(f"First attempt to load classifier failed: {e1}")
+            
+            try:
+                # Attempt 2: Try without token (force public access)
+                logger.info("Attempting to load classifier without token...")
+                self.classifier = pipeline("image-classification", model=classifier_model, device=device, token=False)
+                logger.info("Classifier loaded successfully (without token).")
+                
+            except Exception as e2:
+                logger.error(f"Second attempt failed: {e2}")
+                
+                # Attempt 3: Fallback model
+                fallback_model = "google/vit-base-patch16-224"
+                logger.info(f"Attempting fallback to {fallback_model}...")
+                try:
+                    self.classifier = pipeline("image-classification", model=fallback_model, device=device)
+                    logger.info("Fallback classifier loaded successfully.")
+                except Exception as e3:
+                    logger.error(f"All classifier loading attempts failed. Last error: {e3}")
+                    self.classifier = None
+                    # Don't raise here, allow app to start without classifier (will show error in UI)
+                    self.init_error = f"Classifier load failed: {e1}"
 
         # LLM Setup via API
         # Switched to Llama 3 as requested
