@@ -22,7 +22,7 @@ license: mit
     *   提供詳細的分類信心分數與機率分佈圖。
 
 2.  **風格推薦 (Recommendation)**：
-    *   使用 `Qwen/Qwen2.5-3B-Instruct` 大型語言模型。
+    *   使用 `meta-llama/Meta-Llama-3-8B-Instruct` 大型語言模型。
     *   根據識別結果，生成繁體中文的穿搭風格建議。
 
 3.  **自我反思 (Reflection)**：
@@ -51,9 +51,12 @@ license: mit
 1.  在 Hugging Face 建立一個新的 Space。
 2.  選擇 **Streamlit** 作為 SDK。
 3.  將本專案的所有檔案上傳至 Space 的 Repository。
-4.  Space 將會自動安裝 `requirements.txt` 中的套件並啟動 `app.py`。
+4.  **重要：** 在 Space 的 "Settings" -> "Variables and secrets" 中，新增一個 Secret：
+    *   Name: `HF_TOKEN`
+    *   Value: 您的 Hugging Face Access Token (需有讀取權限)。
+5.  Space 將會自動安裝 `requirements.txt` 中的套件並啟動 `app.py`。
 
-*注意：在 Hugging Face 的免費 CPU 環境 (Basic Hardware) 中，系統會自動切換至 CPU 模式運行。由於 Qwen-1.5B 模型較小，可以在 CPU 環境下順暢運行。*
+*注意：本專案使用 Hugging Face Inference API 進行 LLM 推論，因此不需要在 Space 中下載大型模型權重，但必須設定 `HF_TOKEN` 才能正常運作。*
 
 ## 💻 本地開發與執行
 
@@ -65,7 +68,15 @@ license: mit
 pip install -r requirements.txt
 ```
 
-### 2. 啟動應用程式
+### 2. 設定環境變數
+
+請在專案根目錄建立 `.env` 檔案，並填入您的 Hugging Face Token：
+
+```
+HF_TOKEN=your_hugging_face_token_here
+```
+
+### 3. 啟動應用程式
 
 ```bash
 streamlit run app.py

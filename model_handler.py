@@ -1,8 +1,15 @@
 import torch
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import pipeline
+from huggingface_hub import InferenceClient
+from dotenv import load_dotenv
 import logging
-
 import os
+
+# Suppress TensorFlow warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,9 +49,8 @@ ID2LABEL = {
 class FashionSystem:
     def __init__(self):
         self.classifier = None
-        self.llm_pipeline = None
-        self.tokenizer = None
-        self.model = None
+        self.client = None
+        self.init_error = None
         
     def load_models(self):
         """
@@ -75,68 +81,28 @@ class FashionSystem:
             logger.error(f"Failed to load classifier: {e}")
             raise e
 
-        # LLM ID or Path
-        if os.path.exists(local_llm_path):
-            model_id = local_llm_path
-            logger.info(f"Loading LLM from local path: {model_id}")
-        else:
-            model_id = "Qwen/Qwen2.5-3B-Instruct"
-            logger.info(f"Loading LLM from Hugging Face: {model_id}")
+        # LLM Setup via API
+        # Switched to Llama 3 as requested
+        model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+        # Try to get token from env
+        hf_token = os.getenv("HF_TOKEN")
+        
+        if not hf_token:
+            logger.warning("HF_TOKEN not found in environment variables. Please check your .env file.")
+            print("[Warning] HF_TOKEN not found. LLM features might fail.")
 
-        logger.info(f"Loading LLM ({model_id})...")
-        print(f"[System] Loading LLM: {model_id}")
+        logger.info(f"Initializing InferenceClient for {model_id}...")
+        print(f"[System] Initializing InferenceClient: {model_id}")
+        
         try:
-            # Quantization config for efficiency (requires bitsandbytes)
-            # If user doesn't have GPU, this might fail or be very slow.
-            # We try to load with 4-bit quantization if CUDA is available.
-            if torch.cuda.is_available():
-                try:
-                    logger.info("Attempting to load with 4-bit quantization...")
-                    bnb_config = BitsAndBytesConfig(
-                        load_in_4bit=True,
-                        bnb_4bit_compute_dtype=torch.float16
-                    )
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        model_id,
-                        quantization_config=bnb_config,
-                        device_map="auto"
-                    )
-                    logger.info("4-bit quantization loaded successfully.")
-                except Exception as q_err:
-                    logger.warning(f"Quantization failed: {q_err}. Falling back to standard GPU load.")
-                    print(f"[Warning] Quantization failed ({q_err}). Falling back to standard GPU load.")
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        model_id,
-                        device_map="auto",
-                        torch_dtype=torch.float16
-                    )
-            else:
-                # CPU fallback (Warning: Very Slow for 7B, but okay for 1.5B)
-                logger.warning("CUDA not available. Loading on CPU.")
-                print("[Warning] CUDA not available. Loading on CPU.")
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    model_id,
-                    device_map="cpu",
-                    torch_dtype=torch.float32
-                )
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-            
-            self.llm_pipeline = pipeline(
-                "text-generation",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                max_new_tokens=256
-            )
-            logger.info("LLM loaded successfully.")
-            print("[System] LLM loaded successfully.")
-            
+            self.client = InferenceClient(model=model_id, token=hf_token)
+            logger.info("InferenceClient initialized successfully.")
+            print("[System] InferenceClient initialized successfully.")
         except Exception as e:
-            logger.error(f"Failed to load LLM: {e}")
-            print(f"[Error] Failed to load LLM: {e}")
-            # Fallback for demonstration if LLM fails (e.g. no memory)
-            logger.warning("Using dummy LLM for demonstration purposes due to load failure.")
-            self.llm_pipeline = None
+            logger.error(f"Failed to initialize InferenceClient: {e}")
+            print(f"[Error] Failed to initialize InferenceClient: {e}")
+            self.client = None
+            self.init_error = str(e)
 
     def classify_image(self, image_path, top_k=None):
         if not self.classifier:
@@ -160,39 +126,31 @@ class FashionSystem:
                     
         return results
 
-    def generate_text(self, prompt):
-        if not self.llm_pipeline:
-            return "LLM not available. (Mock: Stylish recommendation)"
+    def generate_text(self, prompt, model_id=None):
+        if not self.client:
+            return "LLM API not available. (Mock: Stylish recommendation)"
         
-        # Use chat template for better instruction following
         messages = [
             {"role": "system", "content": "You are a helpful fashion assistant. Please always respond in Traditional Chinese (繁體中文)."},
             {"role": "user", "content": prompt}
         ]
         
-        # Apply chat template
-        prompt_formatted = self.tokenizer.apply_chat_template(
-            messages, 
-            tokenize=False, 
-            add_generation_prompt=True
-        )
+        try:
+            # Prepare arguments
+            kwargs = {
+                "messages": messages,
+                "max_tokens": 500,
+                "temperature": 0.7
+            }
+            # If a specific model is requested, override the default
+            if model_id:
+                kwargs["model"] = model_id
 
-        sequences = self.llm_pipeline(
-            prompt_formatted,
-            do_sample=True,
-            temperature=0.7,
-            top_p=0.9,
-            num_return_sequences=1,
-            eos_token_id=self.tokenizer.eos_token_id,
-        )
-        
-        # Extract only the generated text (remove the prompt)
-        generated_text = sequences[0]['generated_text']
-        # Qwen/Chat models usually include the prompt in the output, we need to strip it.
-        # The simple replace might fail if the template changes slightly, but usually works.
-        if generated_text.startswith(prompt_formatted):
-            return generated_text[len(prompt_formatted):].strip()
-        return generated_text.strip()
+            response = self.client.chat_completion(**kwargs)
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Generation failed: {e}")
+            return f"Error generating text: {e}"
 
 # Singleton instance
 fashion_system = FashionSystem()
